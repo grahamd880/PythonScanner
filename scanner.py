@@ -3,7 +3,7 @@ from scapy.all import *
 from pprint import pprint
 import re
 import sys
-from fpdf import FPDF
+import webbrowser
 
 def icmp_ping(hosts):
     aliveHosts = list()
@@ -33,12 +33,13 @@ def traceroute(host):
 def tcp_scan(hosts,ports):
     openPorts = list()
     p = IP(dst=hosts)/TCP(dport=ports,flags='S')
-    ans, unans = sr(p,timeout=2)
+    ans, unans = sr(p,timeout=10)
     #sr1(IP(dst=hosts)/TCP(dport=ports, flags='R'),timeout=2) #***********JUST to make sure that all port sessions are closed****************
     
     for answer in ans:
         if(answer[1][1].flags == 'SA'):
             openPorts.append(answer[1][1].sport)
+
     if(len(openPorts) != 0):
         sr(IP(dst=hosts)/TCP(dport=openPorts, flags='R'),timeout=2)
     return openPorts
@@ -123,7 +124,7 @@ def toStringPing(hosts):
     return pingStr
 
 def toStringTrace(hosts,traceDict):
-    traceStr = "\n\nTraceroute results:\n"
+    traceStr = "\n\n*****Traceroute results:******\n"
     for host in hosts:
         traceStr += "\nTraceroute to {}:\n".format(host)
         traceStr += "Hop IP\n"
@@ -135,7 +136,7 @@ def toStringTrace(hosts,traceDict):
     return traceStr
 
 def toStringScan(hosts,tcpDict):
-    scanStr = "\n\nPort scan result:"
+    scanStr = "\n\n*****Port scan result:*****"
     for host in hosts:
         scanStr += "\n\n{}:\n".format(host)
         ports = tcpDict[host]
@@ -146,29 +147,61 @@ def toStringScan(hosts,tcpDict):
             scanStr += "No open ports found\n\n"
     return scanStr
 
-def toPDF(results):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font('Courier','I',14)
-    pdf.cell(results)
-    pdf.output('results.pdf',)
 
-def giveResults(pingFlag,traceFlag,bothFlag,traceDict,hosts,tcpDict):
-    finalStr = "\n\tResults:"
-    if(pingFlag):
-        finalStr += toStringPing(hosts)
-    elif(traceFlag):
-        if(traceDict != -1):
-            finalStr += toStringTrace(hosts,traceDict)
-        else:
-            finalStr += "\n\nTraceroute Results:\nInvalid hosts...Traceroute was not performed\n"   
-    elif(bothFlag):
-        finalStr += toStringPing(hosts)
-        finalStr += toStringTrace(hosts,traceDict)
-    else:
-        finalStr += toStringScan(hosts,tcpDict)
+def toHTML(resultString,pingString,traceString,scanString):
+    resultStr = re.sub('\n\t','',resultString)
+    htmlFile = open('results.html','w')
+
+    htmlContents = """
+    <html>
+    <head></head>
+    <body>
+    <h1 style=\"text-align:center\">{}</h1>""".format(resultStr)
+    if(pingString is not None):
+        htmlContents += "<p\"text-align:center\">{}</p>".format(pingString)
+    if(traceString is not None):
+        htmlContents += "<p\"text-align:center\">{}</p>".format(traceString)
+    if(scanString is not None):
+        htmlContents += "<p\"text-align:center\">{}</p>".format(scanString)
+    htmlContents += """
+    </body>
+    </html>"""
+
+    htmlFile.write(htmlContents)
+    htmlFile.close()
+
+    filename = "results.html"
+    webbrowser.open_new_tab(filename)
     
-    print(finalStr)
+def giveResults(pingFlag,traceFlag,allFlag,traceDict,hosts,tcpDict,html):
+    printString = "\n\tResults:"
+    resultString = "\n\tResults:"
+    pingString = None
+    traceString = None
+    scanString = None
+    if(pingFlag):
+        pingString = toStringPing(hosts)
+        printString += pingString
+    if(traceFlag):
+        if(traceDict != -1):
+            traceString = toStringTrace(hosts,traceDict)
+            printString += traceString
+        else:
+            traceString = "\n\n*****Traceroute Results:*****\nInvalid hosts...Traceroute was not performed\n"   
+            printString += traceString
+    if(allFlag):
+        pingString = toStringPing(hosts)
+        traceString = toStringTrace(hosts,traceDict)
+        scanString = toStringScan(hosts,tcpDict)
+        printString += pingString + traceString + scanString
+    else:
+        scanString= toStringScan(hosts,tcpDict)
+        printString += scanString
+    
+    if(html):
+        toHTML(resultString,pingString,traceString,scanString)
+    else:
+        print(printString)
         
 
 
@@ -178,7 +211,8 @@ parser.add_argument("host",help="The host ip/range to scan")
 parser.add_argument("-p","--PORT",dest='port',help="The port(s) to scan")
 parser.add_argument("-ps","--PINGSWEEP",dest='ps',action='store_true',help="This flag will only perform a ping sweep and return the results")
 parser.add_argument("-T","--TRACEROUTE",dest='T',action='store_true',help="This will only perform a traceroute on a given host")
-parser.add_argument("-b","--BOTH",dest='b',action='store_true',help="This will perform a pingsweep and traceroute to the give host(s)")
+parser.add_argument("-a","--ALL",dest='a',action='store_true',help="This will perform a pingsweep,traceroute, and port scan to the given host(s) and port(s)")
+parser.add_argument("-wh","--HTML",dest='wh',action='store_true',help="Creates an HTML page with the results")
 args = parser.parse_args()
 
 pingResult = None
@@ -191,7 +225,14 @@ if(args.port is None):
 else:
     ports = checkPortInput(args.port)
 
-if(args.b or args.T):
+if(args.a):
+    pingResult = icmp_ping(hosts)
+    traceResult = traceroute(pingResult)
+    tcpDictionary = dict()
+    for host in pingResult:
+        tcpDictionary[host]=tcp_scan(host,ports)
+    scanResult = tcpDictionary
+if(args.T):
     pingResult = icmp_ping(hosts)
     traceResult = traceroute(pingResult)
 elif(args.ps):
@@ -207,4 +248,4 @@ else:
         tcpDictionary[host]=tcp_scan(host,ports)
     scanResult = tcpDictionary
 
-giveResults(args.ps,args.T,args.b,traceResult,pingResult,scanResult)
+giveResults(args.ps,args.T,args.a,traceResult,pingResult,scanResult,args.wh)
