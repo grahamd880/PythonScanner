@@ -3,6 +3,7 @@ from scapy.all import *
 from pprint import pprint
 import re
 import sys
+from fpdf import FPDF
 
 def icmp_ping(hosts):
     aliveHosts = list()
@@ -12,32 +13,22 @@ def icmp_ping(hosts):
     return aliveHosts
     
 def traceroute(host):
-    destinations = set()
-    traceDict = dict()
-    ans,unans = sr(IP(dst=host,ttl=(1,30),id=RandShort())/TCP(flags=0x2),timeout=10)
-    for send,receive in ans:
-        destinations.add(send.dst)
-    for ip in destinations:
-        traceDict[ip] = list()
-    
-    for send,receive in ans:
-        if(receive.src not in traceDict[send.dst]):
-            traceDict[send.dst].append(receive.src)
-    
-    for ip in destinations:
-        print("\nTraceroute to {}:".format(ip))
-        print("Hop  IP")
-        hops = 1
-        for ips in traceDict[ip]:
-            print("{}  {}".format(hops,ips))
-            hops += 1
-    #for key, value in traceDict.values():
-    #    print("\nTraceroute to {}:".format(key))
-    #    print("Hop  IP")
-    #    hops = 1
-    #    for ip in value:
-    #        print("{}  {}".format(hops,ip))
-    #print(send.ttl,receive.src)
+    if(len(icmp_ping(host)) != 0): 
+        destinations = set()
+        traceDict = dict()
+        ans,unans = sr(IP(dst=host,ttl=(1,30),id=RandShort())/TCP(flags=0x2),timeout=10)
+        for send,receive in ans:
+            destinations.add(send.dst)
+        for ip in destinations:
+            traceDict[ip] = list()
+
+        for send,receive in ans:
+            if(receive.src not in traceDict[send.dst]):
+                traceDict[send.dst].append(receive.src)
+
+        return traceDict
+    else:
+        return -1
 
 def tcp_scan(hosts,ports):
     openPorts = list()
@@ -49,7 +40,7 @@ def tcp_scan(hosts,ports):
         if(answer[1][1].flags == 'SA'):
             openPorts.append(answer[1][1].sport)
     if(len(openPorts) != 0):
-        sr1(IP(dst=hosts)/TCP(dport=openPorts, flags='R'),timeout=2)
+        sr(IP(dst=hosts)/TCP(dport=openPorts, flags='R'),timeout=2)
     return openPorts
 
 def checkHostInput(hosts):
@@ -100,7 +91,6 @@ def checkHostInput(hosts):
         print("invalid host format....stopping scan")
         sys.exit()
         
-
 def checkPortInput(ports):
     try:
         if(re.search('-',ports) is not None):
@@ -123,15 +113,63 @@ def checkPortInput(ports):
         print("Only integer port numbers allowed....Stopping scan")
         sys.exit()
 
-def giveResults(hosts,tcpDict):
+def toStringPing(hosts):
+    pingStr = "\n\n*****PingSweep results:*****\n"
+    if(len(hosts) != 0):
+        for host in hosts:
+            pingStr += "[*] {} is alive\n".format(host)
+    else:
+        pingStr += "All hosts seem to be down\n\n"
+    return pingStr
+
+def toStringTrace(hosts,traceDict):
+    traceStr = "\n\nTraceroute results:\n"
     for host in hosts:
-        print("\n\n{}:".format(host))
+        traceStr += "\nTraceroute to {}:\n".format(host)
+        traceStr += "Hop IP\n"
+        hops = 1
+        ips = traceDict[host]
+        for ip in ips:
+            traceStr += "{} {}\n".format(hops,ip)
+            hops += 1
+    return traceStr
+
+def toStringScan(hosts,tcpDict):
+    scanStr = "\n\nPort scan result:"
+    for host in hosts:
+        scanStr += "\n\n{}:\n".format(host)
         ports = tcpDict[host]
         if(len(ports) != 0):
             for port in ports:
-                print("[*] {} TCP Open".format(port))
+                scanStr += "[*] {} TCP Open\n".format(port)
         else:
-            print("No open ports found")
+            scanStr += "No open ports found\n\n"
+    return scanStr
+
+def toPDF(results):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font('Courier','I',14)
+    pdf.cell(results)
+    pdf.output('results.pdf',)
+
+def giveResults(pingFlag,traceFlag,bothFlag,traceDict,hosts,tcpDict):
+    finalStr = "\n\tResults:"
+    if(pingFlag):
+        finalStr += toStringPing(hosts)
+    elif(traceFlag):
+        if(traceDict != -1):
+            finalStr += toStringTrace(hosts,traceDict)
+        else:
+            finalStr += "\n\nTraceroute Results:\nInvalid hosts...Traceroute was not performed\n"   
+    elif(bothFlag):
+        finalStr += toStringPing(hosts)
+        finalStr += toStringTrace(hosts,traceDict)
+    else:
+        finalStr += toStringScan(hosts,tcpDict)
+    
+    print(finalStr)
+        
 
 
 ports = range(1,1081)
@@ -139,45 +177,34 @@ parser = argparse.ArgumentParser()
 parser.add_argument("host",help="The host ip/range to scan")
 parser.add_argument("-p","--PORT",dest='port',help="The port(s) to scan")
 parser.add_argument("-ps","--PINGSWEEP",dest='ps',action='store_true',help="This flag will only perform a ping sweep and return the results")
-parser.add_argument("-t", "--TCP",dest='t',action='store_true',help="This will perform a TCP scan")
-parser.add_argument("-u","--UDP",dest='u',action='store_true',help="This will perform a UDP scan")
-parser.add_argument("-b","--BOTH",dest='b',action='store_true',help="This will perform both a TCP and UDP scan")
 parser.add_argument("-T","--TRACEROUTE",dest='T',action='store_true',help="This will only perform a traceroute on a given host")
-
+parser.add_argument("-b","--BOTH",dest='b',action='store_true',help="This will perform a pingsweep and traceroute to the give host(s)")
 args = parser.parse_args()
 
+pingResult = None
+traceResult = None
+scanResult = None
 
 hosts = checkHostInput(args.host)
-
-if(args.ps):
-    aliveHosts = icmp_ping(hosts)
-    print("\n\n*****PingSweep results:*****")
-    for host in aliveHosts:
-        print("[*] {} is alive".format(host))
-elif(args.T):
-    traceroute(hosts)
-elif(args.b):
-    print("doSomething")
-elif(args.t and args.u):
-    print("dosame as both")
-elif(args.t):
-    print("do tcp scan")
-elif(args.u):
-    print("do udp scan")
+if(args.port is None):
+    print("No port entered......using default")
 else:
-    if(args.port is None):
-        print("No port entered......using default")
-    else:
-        ports = checkPortInput(args.port)
+    ports = checkPortInput(args.port)
 
+if(args.b or args.T):
+    pingResult = icmp_ping(hosts)
+    traceResult = traceroute(pingResult)
+elif(args.ps):
+    pingResult = icmp_ping(hosts)
+else:
     print("\nStarting scan:\n")
     print("Host(s): {}\nPort(s): {}\n\n".format(hosts,ports))
 
-    aliveHosts = icmp_ping(hosts)
+    pingResult = icmp_ping(hosts)
     tcpDictionary = dict()
-    udpDictionary = dict()
-    for host in aliveHosts:
+    for host in pingResult:
         print("\n\n[*] {} is alive. Starting scan:\n".format(host))
         tcpDictionary[host]=tcp_scan(host,ports)
+    scanResult = tcpDictionary
 
-    giveResults(aliveHosts,tcpDictionary)
+giveResults(args.ps,args.T,args.b,traceResult,pingResult,scanResult)
