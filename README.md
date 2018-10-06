@@ -13,9 +13,13 @@ This will enable you to use the scapy module in the script.
 
 **USAGE:**
 
-python scanner.py <Host(s)> [-p <Port(s)> | -ps | -T | -a] [-wh]
+python scanner.py [-H <Host(s)> [-p <Port(s)> | -ps | -T | -a] [-wh]]
 
-Host(s)     - The host to scan (valid form examples: 10.10.10.5-15 or 10.10.10.2,10.10.10.7 or 10.10.10.0/24)
+If the host flag is not selected the gui version of the program will start:
+
+```python scanner.py```
+
+-H Host(s)     - The host to scan (valid form examples: 10.10.10.5-15 or 10.10.10.2,10.10.10.7 or 10.10.10.0/24)
 
 -p Ports    - The ports to scan. If flag not used the default is ports 1-1080. (valid form examples: -p 1-5 or -p 60,20,5 or -p 80)
 
