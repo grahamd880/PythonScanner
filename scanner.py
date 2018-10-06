@@ -160,15 +160,15 @@ def toHTML(resultString,pingString,traceString,scanString):
     if(pingString is not None):
         temp = pingString.split('\n')
         for string in temp:
-            htmlContents += "<p\"text-align:center\">{}</p>".format(string)
+            htmlContents += "<p style=\"text-align:center\">{}</p>".format(string)
     if(traceString is not None):
         temp = traceString.split('\n')
         for string in temp:
-            htmlContents += "<p\"text-align:center\">{}</p>".format(string)
+            htmlContents += "<p style=\"text-align:center\">{}</p>".format(string)
     if(scanString is not None):
         temp = scanString.split('\n')
         for string in temp:
-            htmlContents += "<p\"text-align:center\">{}</p>".format(string)
+            htmlContents += "<p style=\"text-align:center\">{}</p>".format(string)
     htmlContents += """
     </body>
     </html>"""
