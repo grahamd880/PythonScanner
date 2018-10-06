@@ -158,11 +158,17 @@ def toHTML(resultString,pingString,traceString,scanString):
     <body>
     <h1 style=\"text-align:center\">{}</h1>""".format(resultStr)
     if(pingString is not None):
-        htmlContents += "<p\"text-align:center\">{}</p>".format(pingString)
+        temp = pingString.split('\n')
+        for string in temp:
+            htmlContents += "<p\"text-align:center\">{}</p>".format(string)
     if(traceString is not None):
-        htmlContents += "<p\"text-align:center\">{}</p>".format(traceString)
+        temp = traceString.split('\n')
+        for string in temp:
+            htmlContents += "<p\"text-align:center\">{}</p>".format(string)
     if(scanString is not None):
-        htmlContents += "<p\"text-align:center\">{}</p>".format(scanString)
+        temp = scanString.split('\n')
+        for string in temp:
+            htmlContents += "<p\"text-align:center\">{}</p>".format(string)
     htmlContents += """
     </body>
     </html>"""
@@ -182,14 +188,14 @@ def giveResults(pingFlag,traceFlag,allFlag,traceDict,hosts,tcpDict,html):
     if(pingFlag):
         pingString = toStringPing(hosts)
         printString += pingString
-    if(traceFlag):
+    elif(traceFlag):
         if(traceDict != -1):
             traceString = toStringTrace(hosts,traceDict)
             printString += traceString
         else:
             traceString = "\n\n*****Traceroute Results:*****\nInvalid hosts...Traceroute was not performed\n"   
             printString += traceString
-    if(allFlag):
+    elif(allFlag):
         pingString = toStringPing(hosts)
         traceString = toStringTrace(hosts,traceDict)
         scanString = toStringScan(hosts,tcpDict)
